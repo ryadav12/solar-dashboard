@@ -182,6 +182,12 @@ tr:hover td{background:rgba(249,115,22,.05)}
   <div class="card" style="margin-top:20px"><h2>Cumulative Savings vs Investment</h2><div class="chart-wrap-lg"><canvas id="roiChart"></canvas></div></div>
   <div class="card" style="margin-top:20px"><h2>Annual Savings Projection</h2><div class="chart-wrap-lg"><canvas id="annualSavingsChart"></canvas></div></div>
   <div class="card" style="margin-top:20px"><h2>Annual ROI (%)</h2><p style="font-size:.82rem;color:var(--muted);margin-bottom:10px">Return on your $21,000 net investment each year. Shows how annual savings compare to your initial outlay.</p><div class="chart-wrap-lg"><canvas id="annualRoiChart"></canvas></div></div>
+  <div class="card" style="margin-top:20px">
+    <h2>Annualized Return (CAGR) at Key Milestones</h2>
+    <p style="font-size:.82rem;color:var(--muted);margin-bottom:14px">Compound Annual Growth Rate — what your 589% total return looks like expressed as a yearly rate, at different time horizons.</p>
+    <div id="cagrMilestones" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:16px"></div>
+    <div class="chart-wrap"><canvas id="cagrChart"></canvas></div>
+  </div>
   <div class="disclaimer"><strong>Assumptions:</strong> Year 1 generation: 1,200 kWh/kW (NREL PVWatts for NJ). Rate escalation: 2%/yr. Degradation: 0.5%/yr. NJ SREC-II: $85/MWh <strong>for 15 years only</strong> (years 16–25 have $0 SREC income). Net metering at full retail. This is not financial advice.</div>
 </div>
 
@@ -348,7 +354,8 @@ const baselineBills = [
   {month:"Nov 2025",period:"Oct 9 – Nov 10, 2025",days:32,kwh:960,elecCost:234.49,therms:57.608,gasCost:71.04,evCredit:49.19,otherCredit:0,type:"baseline"},
   {month:"Dec 2025",period:"Nov 10 – Dec 11, 2025",days:31,kwh:1067,elecCost:264.88,therms:145.310,gasCost:168.98,evCredit:57.46,otherCredit:0,type:"baseline"},
   {month:"Jan 2026",period:"Dec 11 – Jan 12, 2026",days:33,kwh:1215,elecCost:313.66,therms:187.307,gasCost:219.96,evCredit:44.42,otherCredit:0,type:"baseline"},
-  {month:"Feb 2026",period:"Jan 10 – Feb 10, 2026",days:29,kwh:1314,elecCost:338.73,therms:247.191,gasCost:288.30,evCredit:59.79,otherCredit:10.00,type:"baseline"}
+  {month:"Feb 2026",period:"Jan 10 – Feb 10, 2026",days:29,kwh:1314,elecCost:338.73,therms:247.191,gasCost:288.30,evCredit:59.79,otherCredit:10.00,type:"baseline"},
+  {month:"Mar 2026",period:"Feb 10 – Mar 12, 2026",days:30,kwh:1110,elecCost:289.43,therms:152.023,gasCost:180.44,evCredit:73.44,otherCredit:0,type:"baseline"}
 ];
 
 // ===== SYSTEM CONSTANTS =====
@@ -637,6 +644,28 @@ function rebuildAll(){
   // 5) Annual ROI % chart
   const annualRoiData=roiModel.map(y=>((y.annualSaving/NET_COST)*100).toFixed(1));
   charts.annualRoi=new Chart(document.getElementById('annualRoiChart'),{type:'bar',data:{labels:roiModel.map(y=>'Year '+y.year),datasets:[{label:'Annual ROI %',data:annualRoiData,backgroundColor:roiModel.map(y=>y.year<=SREC_YEARS?'rgba(34,197,94,0.7)':'rgba(59,130,246,0.6)'),borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){const y=roiModel[ctx.dataIndex];return[`Annual ROI: ${ctx.raw}%`,`Savings: ${fmt(y.annualSaving)}`,`Avoided Cost: ${fmt(y.avoidedCost)}`,`SREC: ${fmt(y.srecIncome)}${y.year>SREC_YEARS?' (expired)':''}`]}}}},scales:{x:{title:{display:true,text:'Year'}},y:{beginAtZero:true,title:{display:true,text:'ROI %'},ticks:{callback:v=>v+'%'}}}}});
+
+  // ===== CAGR MILESTONES =====
+  const cagrMilestones=[5,10,15,20,25];
+  const cagrData=cagrMilestones.map(yr=>{
+    const cum=roiModel[yr-1].cumSavings;
+    const totalValue=cum; // total cash returned
+    const cagr=(Math.pow((NET_COST+cum)/NET_COST,1/yr)-1)*100;
+    return {year:yr,cumSavings:cum,cagr:cagr};
+  });
+  let cagrHtml='';
+  const cagrColors=['#ef4444','#f97316','#eab308','#3b82f6','#22c55e'];
+  cagrData.forEach((d,i)=>{
+    cagrHtml+=`<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
+      <div style="font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${d.year}-Year CAGR</div>
+      <div style="font-size:1.8rem;font-weight:700;color:${cagrColors[i]}">${d.cagr.toFixed(1)}%</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-top:4px">Cum. Savings: ${fmt(d.cumSavings)}</div>
+      <div style="font-size:.78rem;color:var(--muted)">Total ROI: ${Math.round((d.cumSavings-NET_COST)/NET_COST*100)}%</div>
+    </div>`;
+  });
+  document.getElementById('cagrMilestones').innerHTML=cagrHtml;
+
+  charts.cagr=new Chart(document.getElementById('cagrChart'),{type:'bar',data:{labels:cagrData.map(d=>d.year+' Years'),datasets:[{label:'Annualized Return (CAGR)',data:cagrData.map(d=>d.cagr.toFixed(1)),backgroundColor:cagrColors.map(c=>c+'b3'),borderColor:cagrColors,borderWidth:2,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){const d=cagrData[ctx.dataIndex];return[`CAGR: ${d.cagr.toFixed(1)}%/yr`,`Cumulative Savings: ${fmt(d.cumSavings)}`,`Total ROI: ${Math.round((d.cumSavings-NET_COST)/NET_COST*100)}%`,`Equivalent to investing $${NET_COST.toLocaleString()} at ${d.cagr.toFixed(1)}% annually`]}}}},scales:{x:{title:{display:true,text:'Investment Horizon'}},y:{beginAtZero:true,title:{display:true,text:'CAGR %'},ticks:{callback:v=>v+'%'}}}}});
 
   // ===== TRACKER SECTION =====
   buildTracker(avgRate,roiModel,paybackYear);
