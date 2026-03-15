@@ -96,6 +96,7 @@ tr:hover td{background:rgba(249,115,22,.05)}
   <button onclick="showSection('gas',this)">Gas</button>
   <button onclick="showSection('costs',this)">Costs</button>
   <button onclick="showSection('roi',this)">Solar ROI</button>
+  <button onclick="showSection('ev',this)">EV Savings</button>
   <button onclick="showSection('tracker',this)" id="trackerBtn" class="highlight">Tracker</button>
   <button onclick="showSection('adddata',this)">+ Add Data</button>
   <button onclick="showSection('data',this)">Raw Data</button>
@@ -206,6 +207,65 @@ tr:hover td{background:rgba(249,115,22,.05)}
     <div class="chart-wrap"><canvas id="cagrChart"></canvas></div>
   </div>
   <div class="disclaimer"><strong>Assumptions:</strong> Year 1 generation: 1,200 kWh/kW (NREL PVWatts for NJ). Rate escalation: 2%/yr. Degradation: 0.5%/yr. NJ SREC-II: $85/MWh <strong>for 15 years only</strong> (years 16–25 have $0 SREC income). Net metering at full retail. This is not financial advice.</div>
+</div>
+
+<!-- ===== EV SAVINGS ===== -->
+<div id="ev" class="section">
+  <div class="grid g4" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+    <div class="card stat" style="border-left:3px solid #a855f7"><div class="value" id="evEffRate" style="color:#a855f7">—</div><div class="label">Avg Cost / kWh (EV)</div></div>
+    <div class="card stat" style="border-left:3px solid #22c55e"><div class="value" id="evCostPerMile" style="color:#22c55e">—</div><div class="label">EV Cost / Mile</div></div>
+    <div class="card stat" style="border-left:3px solid #ef4444"><div class="value" id="gasCostPerMile" style="color:#ef4444">—</div><div class="label">Gas Cost / Mile</div></div>
+    <div class="card stat" style="border-left:3px solid #f97316"><div class="value" id="evTotalKwh" style="color:#f97316">—</div><div class="label">Total EV kWh</div></div>
+    <div class="card stat" style="border-left:3px solid #3b82f6"><div class="value" id="evEstMiles" style="color:#3b82f6">—</div><div class="label">Est. Miles Driven</div></div>
+  </div>
+
+  <!-- VS Comparison -->
+  <div class="card" style="margin-top:20px">
+    <h2 style="color:#a855f7">Tesla Model S vs Comparable Gas Vehicle</h2>
+    <p style="font-size:.82rem;color:var(--muted);margin-bottom:16px">Based on your actual charging data. Gas comparison: 23 MPG on premium fuel ($3.50/gal).</p>
+    <div id="evVsGasComparison"></div>
+  </div>
+
+  <!-- Monthly breakdown table -->
+  <div class="card" style="margin-top:20px">
+    <h2 style="color:#a855f7">Monthly EV Charging Breakdown</h2>
+    <div style="overflow-x:auto"><table id="evMonthlyTable"><thead><tr style="border-bottom:1px solid var(--border);color:var(--muted)">
+      <th style="text-align:left;padding:8px">Month</th>
+      <th style="text-align:right;padding:8px">EV kWh</th>
+      <th style="text-align:right;padding:8px">Avg Rate</th>
+      <th style="text-align:right;padding:8px">Gross Cost</th>
+      <th style="text-align:right;padding:8px">Off-Peak Credit</th>
+      <th style="text-align:right;padding:8px">Net Cost</th>
+      <th style="text-align:right;padding:8px">Eff. $/kWh</th>
+      <th style="text-align:right;padding:8px">Est. Miles</th>
+      <th style="text-align:right;padding:8px">Gas Would Cost</th>
+      <th style="text-align:right;padding:8px">Saved</th>
+    </tr></thead><tbody id="evTableBody"></tbody></table></div>
+  </div>
+
+  <!-- Charts row -->
+  <div class="grid g2" style="margin-top:20px">
+    <div class="card"><h2 style="color:#a855f7">Monthly EV Cost vs Credit</h2><div class="chart-wrap"><canvas id="evCostCreditChart"></canvas></div></div>
+    <div class="card"><h2 style="color:#a855f7">Effective $/kWh vs Grid Rate</h2><div class="chart-wrap"><canvas id="evEffRateChart"></canvas></div></div>
+  </div>
+
+  <!-- Cumulative savings + gas comparison chart -->
+  <div class="card" style="margin-top:20px"><h2 style="color:#a855f7">Cumulative: EV Charging Cost vs Gas Equivalent</h2><p style="font-size:.82rem;color:var(--muted);margin-bottom:10px">Running total of what you paid for EV charging vs what gas would have cost for the same miles.</p><div class="chart-wrap-lg"><canvas id="evCumGasChart"></canvas></div></div>
+
+  <!-- Rebate tracker -->
+  <div class="card" style="margin-top:20px">
+    <h2 style="color:#a855f7">$1,500 EV Enrollment Rebate Tracker</h2>
+    <div id="evRebateTracker"></div>
+  </div>
+
+  <!-- Lifetime projection -->
+  <div class="card" style="margin-top:20px">
+    <h2 style="color:#a855f7">5-Year Fuel Cost Projection</h2>
+    <p style="font-size:.82rem;color:var(--muted);margin-bottom:10px">Projected fuel costs over 5 years based on your actual EV data vs a comparable gas vehicle.</p>
+    <div class="chart-wrap-lg"><canvas id="evProjectionChart"></canvas></div>
+  </div>
+
+  <div class="disclaimer"><strong>Assumptions:</strong> Tesla Model S efficiency: 3.2 mi/kWh (real-world est.). Gas comparison: 23 MPG, premium fuel at $3.50/gal (NJ avg). Gas price escalation: 3%/yr. EV rate escalation: 2%/yr. <strong>$1,500 enrollment credit excluded from per-kWh calculations.</strong> Mileage estimated from kWh × efficiency. This is not financial advice.</div>
 </div>
 
 <!-- ===== TRACKER (Expected vs Actual) ===== -->
@@ -382,6 +442,27 @@ const YEAR1_GEN=SYSTEM_KW*KWH_PER_KW_YEAR;
 // Monthly solar distribution for NJ (fraction of annual generation)
 const MONTHLY_SOLAR_PCT=[0.055,0.065,0.085,0.095,0.110,0.115,0.120,0.110,0.095,0.075,0.040,0.035];
 const MONTH_NAMES=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// ===== EV DATA & COMPARISON CONSTANTS =====
+const MODEL_S_PRICE=74190;
+const MODEL_S_EFF=3.2; // mi/kWh (EPA-based real-world estimate)
+const GAS_MPG=23;
+const PREMIUM_GAS=3.50; // $/gal NJ avg premium
+const EV_REBATE=1500;
+const GAS_COST_PER_MILE=PREMIUM_GAS/GAS_MPG;
+// EV charging data: month, evKwh, avgRate (blended household), grossCost, offPeakCredit, netCost
+const baseEvData=[
+  {month:'Jun 2025',evKwh:70,avgRate:0.2636,grossCost:18.45,credit:7.44,netCost:11.01},
+  {month:'Jul 2025',evKwh:414,avgRate:0.2605,grossCost:107.88,credit:63.17,netCost:44.71},
+  {month:'Aug 2025',evKwh:569,avgRate:0.2368,grossCost:134.74,credit:113.97,netCost:20.77},
+  {month:'Sep 2025',evKwh:673,avgRate:0.2376,grossCost:159.93,credit:135.25,netCost:24.68},
+  {month:'Oct 2025',evKwh:443,avgRate:0.2505,grossCost:110.96,credit:84.38,netCost:26.58},
+  {month:'Nov 2025',evKwh:502,avgRate:0.2311,grossCost:116.02,credit:101.49,netCost:14.53},
+  {month:'Dec 2025',evKwh:573,avgRate:0.2224,grossCost:127.45,credit:111.41,netCost:16.04},
+  {month:'Jan 2026',evKwh:512,avgRate:0.2239,grossCost:114.60,credit:104.28,netCost:10.32},
+  {month:'Feb 2026',evKwh:417,avgRate:0.2237,grossCost:93.28,credit:84.69,netCost:8.59},
+  {month:'Mar 2026',evKwh:506,avgRate:0.2608,grossCost:131.96,credit:73.44,netCost:58.52}
+];
 
 // ===== PERSISTENT STORAGE =====
 let addedBills = JSON.parse(localStorage.getItem('solar_added_bills') || '[]');
@@ -783,6 +864,9 @@ function rebuildAll(){
 
   charts.cagr=new Chart(document.getElementById('cagrChart'),{type:'bar',data:{labels:cagrData.map(d=>d.year+' Years'),datasets:[{label:'Annualized Return (CAGR)',data:cagrData.map(d=>d.cagr.toFixed(1)),backgroundColor:cagrColors.map(c=>c+'b3'),borderColor:cagrColors,borderWidth:2,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){const d=cagrData[ctx.dataIndex];return[`CAGR: ${d.cagr.toFixed(1)}%/yr`,`Cumulative Savings: ${fmt(d.cumSavings)}`,`Total ROI: ${Math.round((d.cumSavings-NET_COST)/NET_COST*100)}%`,`Equivalent to investing $${NET_COST.toLocaleString()} at ${d.cagr.toFixed(1)}% annually`]}}}},scales:{x:{title:{display:true,text:'Investment Horizon'}},y:{beginAtZero:true,title:{display:true,text:'CAGR %'},ticks:{callback:v=>v+'%'}}}}});
 
+  // ===== EV SAVINGS SECTION =====
+  buildEvSection();
+
   // ===== TRACKER SECTION =====
   buildTracker(avgRate,roiModel,paybackYear);
 
@@ -1039,6 +1123,182 @@ async function extractPdfText(file){
     fullText+=lines.join('\n')+'\n';
   }
   return fullText;
+}
+
+// ===== EV SAVINGS BUILD =====
+function buildEvSection(){
+  const ev=baseEvData;
+  const totKwh=ev.reduce((s,d)=>s+d.evKwh,0);
+  const totGross=ev.reduce((s,d)=>s+d.grossCost,0);
+  const totCredit=ev.reduce((s,d)=>s+d.credit,0);
+  const totNet=ev.reduce((s,d)=>s+d.netCost,0);
+  const effRate=totNet/totKwh;
+  const estMiles=totKwh*MODEL_S_EFF;
+  const evCPM=effRate/MODEL_S_EFF;
+  const gasEquiv=estMiles/GAS_MPG*PREMIUM_GAS;
+  const fuelSaved=gasEquiv-totNet;
+  const pctSaved=((fuelSaved/gasEquiv)*100).toFixed(0);
+  const nMonths=ev.length;
+
+  // Stat cards
+  document.getElementById('evEffRate').textContent='$'+effRate.toFixed(3);
+  document.getElementById('evCostPerMile').textContent='$'+evCPM.toFixed(3);
+  document.getElementById('gasCostPerMile').textContent='$'+GAS_COST_PER_MILE.toFixed(3);
+  document.getElementById('evTotalKwh').textContent=totKwh.toLocaleString()+' kWh';
+  document.getElementById('evEstMiles').textContent=Math.round(estMiles).toLocaleString();
+
+  // VS Comparison box
+  const annualMiles=estMiles/nMonths*12;
+  const annualEvCost=totNet/nMonths*12;
+  const annualGasCost=annualMiles/GAS_MPG*PREMIUM_GAS;
+  const annualSaved=annualGasCost-annualEvCost;
+  const rebateRemaining=EV_REBATE-totNet;
+  const monthsRebateLasts=rebateRemaining>0?Math.round(rebateRemaining/(totNet/nMonths)):0;
+
+  let vsHtml=`<div style="display:flex;align-items:stretch;gap:16px;flex-wrap:wrap">
+    <div style="flex:1;min-width:220px;background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.3);border-radius:10px;padding:20px;text-align:center">
+      <div style="font-size:.75rem;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Your Tesla Model S</div>
+      <div style="font-size:2rem;font-weight:700;color:#a855f7">${fmt2(totNet)}</div>
+      <div style="font-size:.82rem;color:var(--muted)">${nMonths} months of charging</div>
+      <div style="font-size:.82rem;color:#a855f7;margin-top:6px">$${evCPM.toFixed(3)}/mile</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-top:2px">~${Math.round(estMiles).toLocaleString()} miles driven</div>
+    </div>
+    <div style="display:flex;align-items:center;font-size:1.5rem;font-weight:700;color:var(--muted);padding:0 8px">vs</div>
+    <div style="flex:1;min-width:220px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:20px;text-align:center">
+      <div style="font-size:.75rem;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Comparable Gas Vehicle</div>
+      <div style="font-size:2rem;font-weight:700;color:var(--red)">${fmt2(gasEquiv)}</div>
+      <div style="font-size:.82rem;color:var(--muted)">Same miles on premium gas</div>
+      <div style="font-size:.82rem;color:var(--red);margin-top:6px">$${GAS_COST_PER_MILE.toFixed(3)}/mile</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-top:2px">23 MPG × $3.50/gal</div>
+    </div>
+    <div style="display:flex;align-items:center;font-size:1.5rem;font-weight:700;color:var(--muted);padding:0 8px">=</div>
+    <div style="flex:1;min-width:220px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:20px;text-align:center">
+      <div style="font-size:.75rem;color:var(--muted);text-transform:uppercase;margin-bottom:8px">You Saved</div>
+      <div style="font-size:2rem;font-weight:700;color:var(--green)">${fmt2(fuelSaved)}</div>
+      <div style="font-size:.82rem;color:var(--green)">${pctSaved}% less than gas</div>
+      <div style="font-size:.82rem;color:var(--green);margin-top:6px">~${fmt2(annualSaved)}/year projected</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-top:2px">${Math.round(estMiles/GAS_MPG)} gallons not burned</div>
+    </div>
+  </div>`;
+  document.getElementById('evVsGasComparison').innerHTML=vsHtml;
+
+  // Monthly table
+  let tbody='';
+  let runNet=0;
+  ev.forEach(d=>{
+    const eff=d.netCost/d.evKwh;
+    const miles=d.evKwh*MODEL_S_EFF;
+    const gasWould=miles/GAS_MPG*PREMIUM_GAS;
+    const saved=gasWould-d.netCost;
+    runNet+=d.netCost;
+    tbody+=`<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px"><strong>${d.month}</strong></td>
+      <td style="text-align:right;padding:8px">${d.evKwh.toLocaleString()}</td>
+      <td style="text-align:right;padding:8px">$${d.avgRate.toFixed(4)}</td>
+      <td style="text-align:right;padding:8px">${fmt2(d.grossCost)}</td>
+      <td style="text-align:right;padding:8px;color:var(--green)">-${fmt2(d.credit)}</td>
+      <td style="text-align:right;padding:8px">${fmt2(d.netCost)}</td>
+      <td style="text-align:right;padding:8px;color:#a855f7;font-weight:600">$${eff.toFixed(4)}</td>
+      <td style="text-align:right;padding:8px">${Math.round(miles).toLocaleString()}</td>
+      <td style="text-align:right;padding:8px;color:var(--red)">${fmt2(gasWould)}</td>
+      <td style="text-align:right;padding:8px;color:var(--green)">${fmt2(saved)}</td>
+    </tr>`;
+  });
+  tbody+=`<tr style="border-top:2px solid #a855f7;font-weight:700">
+    <td style="padding:10px 8px"><strong>Total</strong></td>
+    <td style="text-align:right;padding:8px">${totKwh.toLocaleString()}</td>
+    <td style="text-align:right;padding:8px"></td>
+    <td style="text-align:right;padding:8px">${fmt2(totGross)}</td>
+    <td style="text-align:right;padding:8px;color:var(--green)">-${fmt2(totCredit)}</td>
+    <td style="text-align:right;padding:8px;color:#a855f7">${fmt2(totNet)}</td>
+    <td style="text-align:right;padding:8px;color:#a855f7">$${effRate.toFixed(4)}</td>
+    <td style="text-align:right;padding:8px">${Math.round(estMiles).toLocaleString()}</td>
+    <td style="text-align:right;padding:8px;color:var(--red)">${fmt2(gasEquiv)}</td>
+    <td style="text-align:right;padding:8px;color:var(--green)">${fmt2(fuelSaved)}</td>
+  </tr>`;
+  document.getElementById('evTableBody').innerHTML=tbody;
+
+  // Charts
+  const evLabels=ev.map(d=>d.month.replace('20',''));
+
+  // Cost vs Credit chart
+  charts.evCostCredit=new Chart(document.getElementById('evCostCreditChart'),{type:'bar',data:{labels:evLabels,datasets:[
+    {label:'Gross Cost',data:ev.map(d=>d.grossCost),backgroundColor:'rgba(168,85,247,0.6)',borderRadius:4},
+    {label:'Off-Peak Credit',data:ev.map(d=>d.credit),backgroundColor:'rgba(34,197,94,0.6)',borderRadius:4},
+    {label:'Net Cost',data:ev.map(d=>d.netCost),type:'line',borderColor:'#f97316',borderWidth:2,pointRadius:4,pointBackgroundColor:'#f97316',fill:false,tension:0.3}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},tooltip:{callbacks:{afterLabel:function(ctx){
+    if(ctx.datasetIndex===2){const d=ev[ctx.dataIndex];return 'Eff. rate: $'+(d.netCost/d.evKwh).toFixed(4)+'/kWh';}return '';
+  }}}},scales:{y:{beginAtZero:true,title:{display:true,text:'$'}}}}});
+
+  // Effective rate chart
+  charts.evEffRate=new Chart(document.getElementById('evEffRateChart'),{type:'line',data:{labels:evLabels,datasets:[
+    {label:'Effective $/kWh (after credit)',data:ev.map(d=>(d.netCost/d.evKwh).toFixed(4)),borderColor:'#a855f7',backgroundColor:'rgba(168,85,247,0.1)',fill:true,tension:0.4,pointRadius:5,pointBackgroundColor:'#a855f7'},
+    {label:'Grid Rate (no credit)',data:ev.map(d=>d.avgRate.toFixed(4)),borderColor:'#ef4444',borderDash:[6,3],borderWidth:2,pointRadius:0,fill:false},
+    {label:'Gas Equivalent $/kWh',data:ev.map(()=>(GAS_COST_PER_MILE/MODEL_S_EFF).toFixed(4)),borderColor:'#eab308',borderDash:[3,3],borderWidth:1.5,pointRadius:0,fill:false}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{beginAtZero:true,title:{display:true,text:'$/kWh'},ticks:{callback:v=>'$'+parseFloat(v).toFixed(2)}}}}});
+
+  // Cumulative EV cost vs Gas cost chart
+  let cumEv=0,cumGas=0;
+  const cumEvData=[],cumGasData=[],cumSavedData=[];
+  ev.forEach(d=>{
+    cumEv+=d.netCost;
+    const miles=d.evKwh*MODEL_S_EFF;
+    cumGas+=miles/GAS_MPG*PREMIUM_GAS;
+    cumEvData.push(cumEv.toFixed(2));
+    cumGasData.push(cumGas.toFixed(2));
+    cumSavedData.push((cumGas-cumEv).toFixed(2));
+  });
+  charts.evCumGas=new Chart(document.getElementById('evCumGasChart'),{type:'line',data:{labels:evLabels,datasets:[
+    {label:'Cumulative EV Cost',data:cumEvData,borderColor:'#a855f7',backgroundColor:'rgba(168,85,247,0.1)',fill:true,tension:0.3,pointRadius:4,pointBackgroundColor:'#a855f7'},
+    {label:'Cumulative Gas Cost',data:cumGasData,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,0.1)',fill:true,tension:0.3,pointRadius:4,pointBackgroundColor:'#ef4444'},
+    {label:'Cumulative Savings',data:cumSavedData,borderColor:'#22c55e',borderDash:[6,3],borderWidth:2,pointRadius:3,pointBackgroundColor:'#22c55e',fill:false}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},tooltip:{callbacks:{afterBody:function(ctx){
+    const i=ctx[0].dataIndex;return 'Savings: $'+cumSavedData[i];
+  }}}},scales:{y:{beginAtZero:true,title:{display:true,text:'$'},ticks:{callback:v=>'$'+parseFloat(v).toLocaleString()}}}}});
+
+  // Rebate tracker
+  const pctUsed=((totNet/EV_REBATE)*100).toFixed(1);
+  const remaining=EV_REBATE-totNet;
+  const avgMonthly=totNet/nMonths;
+  const monthsLeft=remaining>0?Math.ceil(remaining/avgMonthly):0;
+  const rebateEndDate=new Date();
+  rebateEndDate.setMonth(rebateEndDate.getMonth()+monthsLeft);
+  const rebateEndStr=rebateEndDate.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  let rebateHtml=`<div style="display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:6px">
+    <span>Used: ${fmt2(totNet)} (${pctUsed}%)</span>
+    <span style="color:var(--green)">Remaining: ${fmt2(remaining>0?remaining:0)}</span>
+  </div>
+  <div style="height:10px;border-radius:5px;background:var(--border);overflow:hidden">
+    <div style="height:100%;border-radius:5px;width:${Math.min(parseFloat(pctUsed),100)}%;background:linear-gradient(90deg,#a855f7,#22c55e)"></div>
+  </div>`;
+  if(remaining>0){
+    rebateHtml+=`<p style="font-size:.82rem;color:var(--muted);margin-top:10px">At your average of ~${fmt2(avgMonthly)}/month, the rebate will cover your EV charging through approximately <strong style="color:var(--green)">${rebateEndStr}</strong>.</p>`;
+  } else {
+    rebateHtml+=`<p style="font-size:.82rem;color:var(--muted);margin-top:10px">Your rebate has been fully utilized. You saved ${fmt2(EV_REBATE)} total.</p>`;
+  }
+  document.getElementById('evRebateTracker').innerHTML=rebateHtml;
+
+  // 5-Year Projection chart
+  const avgMonthlyKwh=totKwh/nMonths;
+  const projLabels=[],projEv=[],projGas=[];
+  let pCumEv=0,pCumGas=0;
+  for(let yr=1;yr<=5;yr++){
+    const annKwh=avgMonthlyKwh*12;
+    const annMiles=annKwh*MODEL_S_EFF;
+    const evRate=effRate*Math.pow(1.02,yr-1);
+    const gasPrice=PREMIUM_GAS*Math.pow(1.03,yr-1);
+    pCumEv+=annKwh*evRate;
+    pCumGas+=annMiles/GAS_MPG*gasPrice;
+    projLabels.push('Year '+yr);
+    projEv.push(Math.round(pCumEv));
+    projGas.push(Math.round(pCumGas));
+  }
+  charts.evProj=new Chart(document.getElementById('evProjectionChart'),{type:'bar',data:{labels:projLabels,datasets:[
+    {label:'EV Fuel Cost (cumulative)',data:projEv,backgroundColor:'rgba(168,85,247,0.7)',borderRadius:4},
+    {label:'Gas Fuel Cost (cumulative)',data:projGas,backgroundColor:'rgba(239,68,68,0.7)',borderRadius:4}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},tooltip:{callbacks:{afterBody:function(ctx){
+    const i=ctx[0].dataIndex;return 'Savings: $'+(projGas[i]-projEv[i]).toLocaleString();
+  }}}},scales:{y:{beginAtZero:true,title:{display:true,text:'Cumulative $'},ticks:{callback:v=>'$'+v.toLocaleString()}}}}});
 }
 
 function parsePsegBill(text){
