@@ -146,6 +146,15 @@ tr:hover td{background:rgba(249,115,22,.05)}
     <div class="card stat blue"><div class="value" id="peakKwh">—</div><div class="label">Peak Month kWh</div></div>
     <div class="card stat green"><div class="value" id="minKwh">—</div><div class="label">Lowest Month kWh</div></div>
   </div>
+  <div class="card" style="margin-top:20px">
+    <h2>Per-Unit Electric Cost ($/kWh)</h2>
+    <p style="font-size:.82rem;color:var(--muted);margin-bottom:14px">Average cost per kWh based on your PSE&G bills, by year.</p>
+    <div id="elecUnitCostYears" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px"></div>
+  </div>
+  <div class="card" style="margin-top:20px">
+    <h2>Annual Electric Summary</h2>
+    <div id="elecAnnualSummary" style="margin-top:10px;overflow-x:auto"></div>
+  </div>
   <div class="card" style="margin-top:20px"><h2>Electric Consumption (kWh)</h2><div class="chart-wrap-lg"><canvas id="elecKwhChart"></canvas></div></div>
   <div class="card" style="margin-top:20px"><h2>Daily Average kWh</h2><div class="chart-wrap"><canvas id="dailyAvgChart"></canvas></div></div>
 </div>
@@ -156,6 +165,14 @@ tr:hover td{background:rgba(249,115,22,.05)}
     <div class="card stat orange"><div class="value" id="totalTherms">—</div><div class="label">Total Therms</div></div>
     <div class="card stat blue"><div class="value" id="peakTherms">—</div><div class="label">Peak Month</div></div>
     <div class="card stat green"><div class="value" id="minTherms">—</div><div class="label">Lowest Month</div></div>
+  </div>
+  <div class="card" style="margin-top:20px">
+    <h2>Per-Unit Gas Cost ($/Therm)</h2>
+    <div id="gasUnitCostYears" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:10px"></div>
+  </div>
+  <div class="card" style="margin-top:20px">
+    <h2>Annual Gas Summary</h2>
+    <div id="gasAnnualSummary" style="margin-top:10px;overflow-x:auto"></div>
   </div>
   <div class="card" style="margin-top:20px"><h2>Gas Consumption (Therms)</h2><div class="chart-wrap-lg"><canvas id="gasThermChart"></canvas></div></div>
 </div>
@@ -573,6 +590,105 @@ function rebuildAll(){
   document.getElementById('lifetime25Savings').textContent=fmt(roiModel[24].cumSavings);
   document.getElementById('roiPercent').textContent=Math.round((roiModel[24].cumSavings-NET_COST)/NET_COST*100)+'%';
 
+  // ===== PER-UNIT COST BY YEAR =====
+  const yearlyStats={};
+  bills.forEach(b=>{
+    const yr=parseInt(b.month.split(' ')[1]);
+    if(!yearlyStats[yr])yearlyStats[yr]={kwh:0,elecCost:0,therms:0,gasCost:0,evCredit:0,months:0};
+    yearlyStats[yr].kwh+=b.kwh;
+    yearlyStats[yr].elecCost+=b.elecCost;
+    yearlyStats[yr].therms+=b.therms;
+    yearlyStats[yr].gasCost+=b.gasCost;
+    yearlyStats[yr].evCredit+=b.evCredit;
+    yearlyStats[yr].months++;
+  });
+  // Filter out 2024 (only 1 month of data, not representative)
+  const yearKeys=Object.keys(yearlyStats).filter(yr=>parseInt(yr)>=2025).sort();
+  const yearColors={'2025':'#f97316','2026':'#3b82f6','2027':'#22c55e','2028':'#a855f7'};
+
+  // Electric per-unit cost cards
+  let elecUnitHtml='';
+  yearKeys.forEach(yr=>{
+    const s=yearlyStats[yr];
+    const rate=(s.elecCost/s.kwh);
+    const prevYr=yearlyStats[parseInt(yr)-1];
+    let yoyHtml='';
+    if(prevYr&&parseInt(yr)-1>=2025){
+      const prevRate=prevYr.elecCost/prevYr.kwh;
+      const pctChg=((rate-prevRate)/prevRate)*100;
+      const arrow=pctChg>0?'\u2191':'\u2193';
+      const color=pctChg>0?'var(--red)':'var(--green)';
+      yoyHtml=`<div style="font-size:.78rem;color:${color};margin-top:6px">${arrow} ${Math.abs(pctChg).toFixed(1)}% vs ${parseInt(yr)-1}</div>`;
+    }
+    elecUnitHtml+=`<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
+      <div style="font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${yr} (${s.months} mo)</div>
+      <div style="font-size:1.6rem;font-weight:700;color:${yearColors[yr]||'var(--accent)'}">$${rate.toFixed(4)}</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-top:4px">per kWh</div>
+      ${yoyHtml}
+    </div>`;
+  });
+  document.getElementById('elecUnitCostYears').innerHTML=elecUnitHtml;
+
+  // Calculate EV credits per year, excluding the one-time $1500 enrollment credit from May 2025
+  const evByYear={};
+  bills.forEach(b=>{
+    const yr=parseInt(b.month.split(' ')[1]);
+    if(yr<2025)return;
+    if(!evByYear[yr])evByYear[yr]=0;
+    let ev=b.evCredit||0;
+    // Exclude the one-time $1500 EV enrollment credit (May 2025)
+    if(ev>=1500)ev=0;
+    evByYear[yr]+=ev;
+  });
+
+  // Electric annual summary table with EV credit rows
+  let elecSumHtml='<table style="width:100%;font-size:.85rem;border-collapse:collapse"><thead><tr style="border-bottom:1px solid var(--border);color:var(--muted)"><th style="text-align:left;padding:6px">Year</th><th style="text-align:right;padding:6px">Mo.</th><th style="text-align:right;padding:6px">Total kWh</th><th style="text-align:right;padding:6px">Total Cost</th><th style="text-align:right;padding:6px">Avg $/kWh</th></tr></thead><tbody>';
+  yearKeys.forEach(yr=>{
+    const s=yearlyStats[yr];
+    const baseRate=(s.elecCost/s.kwh).toFixed(4);
+    const evCr=evByYear[parseInt(yr)]||0;
+    const netCost=s.elecCost-evCr;
+    const effRate=(netCost/s.kwh).toFixed(4);
+    elecSumHtml+=`<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px;color:${yearColors[yr]||'var(--text)'};font-weight:600">${yr}</td><td style="text-align:right;padding:6px">${s.months}</td><td style="text-align:right;padding:6px">${s.kwh.toLocaleString()}</td><td style="text-align:right;padding:6px">${fmt2(s.elecCost)}</td><td style="text-align:right;padding:6px;font-weight:600">$${baseRate}</td></tr>`;
+    elecSumHtml+=`<tr style="border-bottom:1px solid var(--border);background:rgba(34,197,94,0.06)"><td style="padding:6px;color:var(--green);font-size:.8rem;padding-left:20px">└ EV Charging Credit</td><td style="text-align:right;padding:6px"></td><td style="text-align:right;padding:6px"></td><td style="text-align:right;padding:6px;color:var(--green)">-${fmt2(evCr)}</td><td style="text-align:right;padding:6px"></td></tr>`;
+    elecSumHtml+=`<tr style="border-bottom:2px solid var(--border);background:rgba(34,197,94,0.06)"><td style="padding:6px;color:var(--green);font-size:.8rem;padding-left:20px">└ Effective (after EV)</td><td style="text-align:right;padding:6px"></td><td style="text-align:right;padding:6px"></td><td style="text-align:right;padding:6px;color:var(--green);font-weight:600">${fmt2(netCost)}</td><td style="text-align:right;padding:6px;color:var(--green);font-weight:600">$${effRate}</td></tr>`;
+  });
+  elecSumHtml+='</tbody></table>';
+  elecSumHtml+='<div style="font-size:.75rem;color:var(--muted);margin-top:8px;font-style:italic">* EV credits exclude the one-time $1,500 enrollment credit from May 2025.</div>';
+  document.getElementById('elecAnnualSummary').innerHTML=elecSumHtml;
+
+  // Gas per-unit cost cards
+  let gasUnitHtml='';
+  yearKeys.forEach(yr=>{
+    const s=yearlyStats[yr];
+    const rate=(s.gasCost/s.therms);
+    const prevYr=yearlyStats[parseInt(yr)-1];
+    let yoyHtml='';
+    if(prevYr&&parseInt(yr)-1>=2025){
+      const prevRate=prevYr.gasCost/prevYr.therms;
+      const pctChg=((rate-prevRate)/prevRate)*100;
+      const arrow=pctChg>0?'\u2191':'\u2193';
+      const color=pctChg>0?'var(--red)':'var(--green)';
+      yoyHtml=`<div style="font-size:.78rem;color:${color};margin-top:4px">${arrow} ${Math.abs(pctChg).toFixed(1)}% vs ${parseInt(yr)-1}</div>`;
+    }
+    gasUnitHtml+=`<div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
+      <div style="font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${yr} (${s.months} mo)</div>
+      <div style="font-size:1.6rem;font-weight:700;color:${yearColors[yr]||'var(--accent)'}">$${rate.toFixed(4)}</div>
+      <div style="font-size:.78rem;color:var(--muted);margin-top:4px">per therm</div>
+      ${yoyHtml}
+    </div>`;
+  });
+  document.getElementById('gasUnitCostYears').innerHTML=gasUnitHtml;
+
+  // Gas annual summary table
+  let gasSumHtml='<table style="width:100%;font-size:.85rem;border-collapse:collapse"><thead><tr style="border-bottom:1px solid var(--border);color:var(--muted)"><th style="text-align:left;padding:6px">Year</th><th style="text-align:right;padding:6px">Months</th><th style="text-align:right;padding:6px">Total Therms</th><th style="text-align:right;padding:6px">Total Cost</th><th style="text-align:right;padding:6px">Avg $/Therm</th></tr></thead><tbody>';
+  yearKeys.forEach(yr=>{
+    const s=yearlyStats[yr];
+    gasSumHtml+=`<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px;color:${yearColors[yr]||'var(--text)'};font-weight:600">${yr}</td><td style="text-align:right;padding:6px">${s.months}</td><td style="text-align:right;padding:6px">${s.therms.toFixed(1)}</td><td style="text-align:right;padding:6px">${fmt2(s.gasCost)}</td><td style="text-align:right;padding:6px;font-weight:600">$${(s.gasCost/s.therms).toFixed(4)}</td></tr>`;
+  });
+  gasSumHtml+='</tbody></table>';
+  document.getElementById('gasAnnualSummary').innerHTML=gasSumHtml;
+
   // ===== YoY HELPER =====
   // Build a lookup: monthName (e.g. "Dec") -> array of {year, bill} sorted by year
   const yoyLookup={};
@@ -838,6 +954,7 @@ async function processPdfFiles(files){
       const parsed=parsePsegBill(text);
       parsed._filename=file.name;
       parsed._success=!!(parsed.kwh && parsed.elecCost);
+      if(!parsed._success)parsed._rawText=text;
       results.push(parsed);
     }catch(err){
       results.push({_filename:file.name,_success:false,_error:err.message});
@@ -880,6 +997,9 @@ async function processPdfFiles(files){
     html+=`<div class="alert alert-warning" style="margin-top:8px">Could not parse ${failed.length} file${failed.length>1?'s':''}:</div>`;
     failed.forEach(r=>{
       html+=`<div style="font-size:.82rem;color:var(--red);padding:4px 0">${r._filename}: ${r._error||'Could not extract bill data. Is this a PSE&G bill?'}</div>`;
+      if(r._rawText){
+        html+=`<details style="margin:4px 0 8px"><summary style="font-size:.78rem;color:var(--muted);cursor:pointer">Show extracted text (for debugging)</summary><pre style="font-size:.72rem;color:var(--muted);max-height:200px;overflow:auto;background:var(--bg);padding:8px;border-radius:6px;margin-top:4px;white-space:pre-wrap">${r._rawText.slice(0,3000)}</pre></details>`;
+      }
     });
   }
 
@@ -896,8 +1016,27 @@ async function extractPdfText(file){
   for(let i=1;i<=pdf.numPages;i++){
     const page=await pdf.getPage(i);
     const content=await page.getTextContent();
-    const pageText=content.items.map(item=>item.str).join(' ');
-    fullText+=pageText+'\n';
+    // Sort items by position (top-to-bottom, left-to-right) to maintain reading order
+    const items=content.items.filter(item=>item.str.trim().length>0);
+    items.sort((a,b)=>{
+      const ay=Math.round(a.transform[5]); // y position
+      const by=Math.round(b.transform[5]);
+      if(Math.abs(ay-by)>3) return by-ay; // higher y = earlier (PDF coords are bottom-up)
+      return a.transform[4]-b.transform[4]; // same line: left to right by x
+    });
+    // Group items into lines (items within 3pt y are same line)
+    let lines=[], curLine=[], curY=null;
+    items.forEach(item=>{
+      const y=Math.round(item.transform[5]);
+      if(curY===null||Math.abs(y-curY)>3){
+        if(curLine.length)lines.push(curLine.map(it=>it.str).join(' '));
+        curLine=[item]; curY=y;
+      } else {
+        curLine.push(item);
+      }
+    });
+    if(curLine.length)lines.push(curLine.map(it=>it.str).join(' '));
+    fullText+=lines.join('\n')+'\n';
   }
   return fullText;
 }
@@ -979,15 +1118,43 @@ function parsePsegBill(text){
     if(gasAlt)result.gasCost=parseFloat(gasAlt[1].replace(/,/g,''));
   }
 
+  // Additional fallbacks for electric kWh when PDF.js text order differs
+  if(!result.kwh){
+    // Try "XX days X,XXX kWh" anywhere
+    const kwhFB=t.match(/(\d+)\s*days?\s*([\d,]+)\s*kWh/i);
+    if(kwhFB){result.days=parseInt(kwhFB[1]);result.kwh=parseInt(kwhFB[2].replace(/,/g,''));}
+  }
+  if(!result.kwh){
+    // Try standalone "X,XXX kWh" near "electric"
+    const kwhFB2=t.match(/electric[^]*?([\d,]{3,})\s*kWh/i);
+    if(kwhFB2)result.kwh=parseInt(kwhFB2[1].replace(/,/g,''));
+  }
+
+  // Additional fallback for therms
+  if(!result.therms){
+    const thermFB=t.match(/(\d+)\s*days?\s*([\d,.]+)\s*therms/i);
+    if(thermFB){if(!result.days)result.days=parseInt(thermFB[1]);result.therms=parseFloat(thermFB[2].replace(/,/g,''));}
+  }
+  if(!result.therms){
+    // "Converted to therms" line: "x 1.036 152.023"
+    const thermFB2=t.match(/Converted to therms.*?([\d.]+)\s/i);
+    if(thermFB2)result.therms=parseFloat(thermFB2[1]);
+  }
+
   // Days fallback from period
   if(!result.days && result.period){
-    // Try to calculate from period dates
     const dates=result.period.match(/(\w+ \d{1,2},?\s*\d{4})/g);
     if(dates && dates.length>=2){
       const d1=new Date(dates[0]);
       const d2=new Date(dates[1]);
       if(!isNaN(d1)&&!isNaN(d2))result.days=Math.round((d2-d1)/(1000*60*60*24));
     }
+  }
+
+  // EV credit fallback: look for "$XX.XX CR" near "Electric Vehicle"
+  if(!result.evCredit){
+    const evFB=t.match(/\$?([\d,]+\.?\d*)\s*CR[^]*?Electric Vehicle/i)||t.match(/Electric Vehicle[^]*?\$?([\d,]+\.?\d*)\s*CR/i);
+    if(evFB)result.evCredit=parseFloat(evFB[1].replace(/,/g,''));
   }
 
   return result;
