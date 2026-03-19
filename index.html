@@ -212,7 +212,9 @@ tr:hover td{background:rgba(249,115,22,.05)}
 <!-- ===== EV SAVINGS ===== -->
 <div id="ev" class="section">
   <div class="grid g4" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+    <div class="card stat" style="border-left:3px solid #22c55e"><div class="value" id="evHomeRate" style="color:#22c55e">—</div><div class="label">Home $/kWh</div></div>
     <div class="card stat" style="border-left:3px solid #a855f7"><div class="value" id="evEffRate" style="color:#a855f7">—</div><div class="label">Blended $/kWh</div></div>
+    <div class="card stat" style="border-left:3px solid #ef4444"><div class="value" id="gasEquivPerKwh" style="color:#ef4444">—</div><div class="label">Gas Equiv. / kWh</div></div>
     <div class="card stat" style="border-left:3px solid #22c55e"><div class="value" id="evCostPerMile" style="color:#22c55e">—</div><div class="label">EV Cost / Mile</div></div>
     <div class="card stat" style="border-left:3px solid #ef4444"><div class="value" id="gasCostPerMile" style="color:#ef4444">—</div><div class="label">Gas Cost / Mile</div></div>
     <div class="card stat" style="border-left:3px solid #22c55e"><div class="value" id="evPctCheaper" style="color:#22c55e">—</div><div class="label">Cheaper Than Gas</div></div>
@@ -1172,9 +1174,12 @@ function buildEvSection(){
   const pctCheaper=(((GAS_COST_PER_MILE-allCPMStat)/GAS_COST_PER_MILE)*100).toFixed(0);
 
   // Stat cards (combined home + supercharger)
+  document.getElementById('evHomeRate').textContent='$'+effRate.toFixed(3);
   document.getElementById('evEffRate').textContent='$'+allEffRate.toFixed(3);
   document.getElementById('evCostPerMile').textContent='$'+allCPMStat.toFixed(3);
   document.getElementById('gasCostPerMile').textContent='$'+GAS_COST_PER_MILE.toFixed(3);
+  const gasEquivPerKwh=GAS_COST_PER_MILE*MODEL_S_EFF; // what gas costs per kWh-equivalent of driving
+  document.getElementById('gasEquivPerKwh').textContent='$'+(gasEquivPerKwh).toFixed(3);
   document.getElementById('evPctCheaper').textContent=pctCheaper+'%';
   document.getElementById('evTotalKwh').textContent=allKwh.toLocaleString()+' kWh';
   document.getElementById('evEstMiles').textContent=Math.round(allMiles).toLocaleString();
